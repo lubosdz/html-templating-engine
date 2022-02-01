@@ -1,0 +1,26 @@
+{
+	"name": "lubosdz/html-templating-engine",
+	"description": "Fast and flexible HTML templating engine for PHP with zero configuration and no dependencies.",
+	"license": "BSD-3-Clause",
+	"keywords": ["templating", "HTML renderer"],
+	"support": {
+		"source": "https://github.com/lubosdz/html-templating-engine",
+		"issues": "https://github.com/lubosdz/html-templating-engine/issues"
+	},
+	"authors": [
+		{
+			"name": "lubosdz",
+			"email": "lubosdz@gmail.com"
+		}
+	],
+	"minimum-stability": "dev",
+	"prefer-stable": true,
+	"require": {
+		"php": ">=7.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"lubosdz\\html\\": "src"
+		}
+	}
+}
