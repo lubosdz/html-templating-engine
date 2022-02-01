@@ -19,11 +19,11 @@ $ composer require "lubosdz/html-templating-engine"
 or via `composer.json`:
 
 ```bash
-	"require": {
-		...
-		"lubosdz/html-templating-engine": "^1.0",
-		...
-	},
+"require": {
+	...
+	"lubosdz/html-templating-engine": "^1.0",
+	...
+},
 ```
 
 
