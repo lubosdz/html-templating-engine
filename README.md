@@ -1,9 +1,9 @@
 HTML Templating Engine
 ======================
 
-Simple, fast and flexible HTML templating engine for PHP 7.0 - 8.1 with zero configuration and no dependencies.
+Simple, fast and flexible HTML templating engine with zero configuration and no dependencies.
 Supports basic control structures (IF, FOR, SET), dynamic directives and public object properties.
-It is similar to [Twig](https://twig.symfony.com/) or [Blade](https://laravel.com/docs/8.x/blade), though much simpler.
+It is similar to [Twig](https://twig.symfony.com/) or [Blade](https://laravel.com/docs/8.x/blade).
 
 It can be used to render e.g. an invoice or a contract from HTML markup edited in a WYSIWYG editor and turn it optionally into a PDF or MS Word file.
 Version with features specific for [Yii2 framework](https://www.yiiframework.com/) can be found at [lubosdz/yii2-template-engine](https://github.com/lubosdz/yii2-template-engine).
@@ -263,6 +263,15 @@ class MyRenderer extends \lubosdz\html\TemplatingEngine
 
 Changelog
 =========
+
+1.0.1 - released 2023-09-05
+---------------------------
+
+* support PHP 8.2
+* properly detect valid Datetime string in built-in directive
+* forceReplace now takes beside boolean also string as a replacement value
+* fixed the IF-test
+
 
 1.0.0, released 2022-02-01
 --------------------------

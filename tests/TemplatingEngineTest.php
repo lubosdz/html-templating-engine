@@ -1,7 +1,7 @@
 <?php
 /**
 * Tests for HTML templating engine
-* Tests pass for PHP 7.0 - 8.1.
+* Tests pass for PHP 7.0 - 8.2
 */
 
 use lubosdz\html\TemplatingEngine;
@@ -14,7 +14,7 @@ class TemplatingEngineTest extends TestCase
 	/**
 	* Run before each test is started
 	* We intentionally avoid setUp() because it requires different syntax depending on PHP version:
-	* - PHP 8.1 requires parent's compatible syntax, means adding return type : void
+	* - PHP 8.1+ requires parent's compatible syntax, means adding return type : void
 	* - PHP 7.1 - 8.0 will run, void supported
 	* - PHP 7.0 - does not recognize void
 	* We want simply run tests on any version 7.0+ without adjusting the code.
@@ -122,6 +122,32 @@ HTML;
 		$resultHtml = $engine->render($html, $params);
 		$expectedHtml = 'Customer created on 1-2-3 at {{ oneTwoNotReplaced }}.';
 		$this->assertTrue(false !== strpos($resultHtml, '1-2-3') && false === strpos($resultHtml, 'oneTwoNotReplaced'));
+
+		// test forced stringual placeholder
+		$html = 'Evaluating ... [xxx {{ nonExistend }} yyy]';
+		$engine->setForceReplace('---');
+		$resultHtml = $engine->render($html);
+		$this->assertTrue($resultHtml == "Evaluating ... [xxx --- yyy]");
+
+		$resultHtml = $engine->render($html, ['nonExistend' => 'ooo']);
+		$this->assertTrue($resultHtml == "Evaluating ... [xxx ooo yyy]");
+
+		$resultHtml = $engine->render($html, ['nonExistendxxx' => 'ooo']);
+		$this->assertTrue($resultHtml == "Evaluating ... [xxx --- yyy]");
+
+		$resultHtml = $engine->render($html, ['nonExisten' => 'ooo']);
+		$this->assertTrue($resultHtml == "Evaluating ... [xxx --- yyy]");
+
+		$resultHtml = $engine->render($html, ['nonExistenD' => 'ooo']);
+		$this->assertTrue($resultHtml == "Evaluating ... [xxx --- yyy]");
+
+		$engine->setForceReplace('');
+		$resultHtml = $engine->render($html);
+		$this->assertTrue($resultHtml == "Evaluating ... [xxx  yyy]");
+
+		$engine->setForceReplace(false);
+		$resultHtml = $engine->render($html);
+		$this->assertTrue($resultHtml == $html);
 	}
 
 	/**
@@ -160,7 +186,7 @@ HTML;
 
 		$html = <<<HTML
 {{ if condition == 5 && customer.id > 0 }}
-	MATCH #1 - CONDITION IS EXACTLY 5 for customer ID. {{ customer.id }} created on {{ customer.created_datetime | date }}.
+	MATCH #1 - CONDITION IS EXACTLY 5 for customer ID. {{ customer.id }} created on {{ customer.datetime_created | date }}.
 {{ elseif condition > 5 }}
 	MATCH #2 - CONDITION IS OVER 5.
 {{ elseif condition < 0 }}
