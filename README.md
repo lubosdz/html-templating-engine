@@ -264,6 +264,15 @@ class MyRenderer extends \lubosdz\html\TemplatingEngine
 Changelog
 =========
 
+1.0.2 - released 2023-09-18
+---------------------------
+
+* support configurable argument separator (beside default semicolon ";")
+* resolve deep-tree argument key conflicts
+* added built-in directive concat, trim
+* added tests, improved documentation, typehints
+
+
 1.0.1 - released 2023-09-05
 ---------------------------
 

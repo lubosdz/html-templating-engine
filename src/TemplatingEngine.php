@@ -1,17 +1,23 @@
 <?php
 /**
-* Copyright (c) 2022 - 2023 Lubos Dzurik (https://github.com/lubosdz)
-* Fast & flexible HTML templating engine for PHP without dependencies and zero configuration.
+* Template rendering engine for PHP 7.0+
+* Fast, secure, flexible, extensible with zero configuration and no dependencies, similar to Blade or Twig.
 *
-* Sample:
+* Copyright (c) Lubos Dzurik (https://github.com/lubosdz), distributed under BSD license (free personal & commercial usage)
+*
+* Example:
+* --------
 *   "Your order #{{order.id}} has been accepted on {{ order.created_datetime | date }}."
 * will translate into:
-*   "Your order #123 has been accepted on 20.08.2020."
+*   "Your order #123 has been accepted on 20.08.2023."
 *
-* Supported structures:
+* Supports:
+* ---------
 *  - IF .. ELSEIF .. ELSE .. ENDIF
 *  - FOR ... ELSEFOR .. ENDFOR
 *  - SET variable = expression
+*  - dynamic custom directives
+*  - built-in most common directives and date/time formatter
 *
 * Github repos:
 *  - https://github.com/lubosdz/yii2-template-engine
@@ -61,6 +67,11 @@ class TemplatingEngine
 	protected $forceReplace = false;
 
 	/**
+	* @var string Argument separator, defaults to semicolon [;]
+	*/
+	protected $argSeparator = ';';
+
+	/**
 	* @var array Variables parsed & evaluated by SET directive
 	*/
 	protected $globalVars = [];
@@ -83,6 +94,7 @@ class TemplatingEngine
 
 	/**
 	* Return collected errors
+	* @return TemplatingEngine
 	*/
 	public function getErrors()
 	{
@@ -91,6 +103,7 @@ class TemplatingEngine
 
 	/**
 	* Remove collected errors
+	* @return TemplatingEngine
 	*/
 	public function clearErrors()
 	{
@@ -99,8 +112,9 @@ class TemplatingEngine
 	}
 
 	/**
-	* Add error
-	* @param string $txt
+	* Add an error
+	* @param string $txt Error string
+	* @return TemplatingEngine
 	*/
 	protected function addError($txt)
 	{
@@ -113,6 +127,7 @@ class TemplatingEngine
 	/**
 	* Set whether errors should be logged after processing the output
 	* @param bool $log
+	* @return TemplatingEngine
 	*/
 	public function setLogErrors($log)
 	{
@@ -123,6 +138,7 @@ class TemplatingEngine
 	/**
 	* @param bool|string $replace Whether to remove placeholders if variable not defined or error occurs
 	* 		 If bool TRUE, missed splaceholder will have value NULL, if string "...." then missed placeholders will become "...."
+	* @return TemplatingEngine
 	*/
 	public function setForceReplace($replace)
 	{
@@ -131,9 +147,21 @@ class TemplatingEngine
 	}
 
 	/**
+	* Set the argument separator, defaults to semicolon [;]
+	* @param string $sep
+	* @return TemplatingEngine
+	*/
+	public function setArgSeparator($sep)
+	{
+		$this->argSeparator = $sep;
+		return $this;
+	}
+
+	/**
 	* Set arbitrary dynamic directive, e.g. this is {{ output | coloredText(yellow) }}
 	* @param string $name
 	* @param callable $callable
+	* @return TemplatingEngine
 	*/
 	public function setDirective($name, $callable)
 	{
@@ -148,7 +176,7 @@ class TemplatingEngine
 	* - list of valid params to be replaced
 	* - html raw input - source HTML template before processing
 	* @param bool $reset Reset / clear resources after being returned
-	* @return array($map, $placeholders, $values, $html)
+	* @return array($map, $placeholders, $values, $htmlRaw)
 	*/
 	public function getResources($reset = true)
 	{
@@ -330,8 +358,8 @@ class TemplatingEngine
 		// e.g. "order.price|round(2)" or "car.car_title"
 		$args = explode('(', trim($directive));
 		$directive = array_shift($args);
-		$directive = trim($directive); // fix spaces between arguments e.g. "round  (2)"
-		$args = $args ? trim(implode($args), "() \n,;") : null;
+		$directive = trim($directive, ' .'); // fix spaces between arguments e.g. "round  (2)" and remove trailing/leading dots
+		$args = $args ? trim(implode($this->argSeparator, $args), "() \n{$this->argSeparator}") : null;
 
 		if (false !== strpos($directive, '.')) {
 			// e.g. model.attribute or model.related.attribute
@@ -347,7 +375,7 @@ class TemplatingEngine
 			// implemented functions / directives
 			if ($args !== null) {
 				// parse arguments, semicolon is argument separator, since it occurs less in common strings
-				$args = explode(';', $args);
+				$args = explode($this->argSeparator, $args);
 				$args = array_map('trim', $args);
 				// @todo - replace with variadics (since PHP 5.6), currently we support up to 3 arguments
 				if (1 == count($args)) {
@@ -384,32 +412,40 @@ class TemplatingEngine
 	*/
 	protected function getValue($directive, array $paramsValid)
 	{
-		$chain = explode('.', $directive);
-		$model = $array = $tmp = null;
+		$val = null;
 
-		while ($attr = array_shift($chain)) {
-			$attrLower = strtolower($attr);
-			if (!$model && !$array) {
-				if (array_key_exists($attrLower, $paramsValid) && is_object($paramsValid[$attrLower])) {
-					$model = $paramsValid[$attrLower];
-				} elseif (array_key_exists($attr, $paramsValid) && is_array($paramsValid[$attr])) {
-					$array = $paramsValid[$attr];
+		if(array_key_exists($directive, $paramsValid)){
+			// quick lookup directly in values tree
+			// here we also resolve conflicting keys by prioritizing keys with shallower depth within the values tree
+			$val = $paramsValid[$directive];
+		}else{
+			$chain = explode('.', $directive);
+			$model = $array = null;
+
+			while ($attr = array_shift($chain)) {
+				$attrLower = strtolower($attr);
+				if (!$model && !$array) {
+					if (array_key_exists($attrLower, $paramsValid) && is_object($paramsValid[$attrLower])) {
+						$model = $paramsValid[$attrLower];
+					} elseif (array_key_exists($attr, $paramsValid) && is_array($paramsValid[$attr])) {
+						$array = $paramsValid[$attr];
+					}
+				} elseif ($model && property_exists($model, $attr)) {
+					$val = $model->{$attr};
+					if (is_object($val)) {
+						// set related model
+						$model = $val;
+					}
+				} elseif ($array && array_key_exists($attr, $array)) {
+					$val = $array[$attr];
+				} else {
+					// invalid attribute - ensure NULL value as a replacement candidate
+					$val = null;
 				}
-			} elseif ($model && property_exists($model, $attr)) {
-				$tmp = $model->{$attr};
-				if (is_object($tmp)) {
-					// set related model
-					$model = $tmp;
-				}
-			} elseif ($array && array_key_exists($attr, $array)) {
-				$tmp = $array[$attr];
-			} else {
-				// invalid attribute - ensure NULL value even if related model found
-				$tmp = null;
 			}
 		}
 
-		return $tmp;
+		return $val;
 	}
 
 	/**
@@ -636,7 +672,7 @@ class TemplatingEngine
 	####################################################################
 
 	/**
-	* Return current timestamp
+	* Return current timestamp e.g. "{{ now | date }}"
 	* @param null $dummy Just args placeholder, not in use
 	* @param int $shiftSecs Optionally shift returned time relatively to current time, e.g. "now(+7200)" will return +2 hours
 	*/
@@ -650,7 +686,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Return today's date
+	* Return formatted today's date e.g. "{{ today }}"
 	* @param null $dummy Just args placeholder, not in use
 	* @param string $format defaults to "Y-m-d" if empty
 	* @param int|float $shiftDays e.g. "today(+14)" will generate formatted date +14 days
@@ -668,7 +704,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Return date
+	* Return formatted date e.g. "{{ order.datetime_created | date }}"
 	* @param int|string $val Timestamp or date string
 	* @param string $format e.g. medium|short|long
 	*/
@@ -685,7 +721,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Return time
+	* Return locally formatted time e.g. "{{ order.datetime_created | time }}"
 	* @param int|string $val Timestamp or date string
 	* @param string $format defaults to "H:i" if empty
 	*/
@@ -726,7 +762,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Return UPPERCASE STRING
+	* Return UPPERCASED string e.g. "{{ user.name | upper }}"
 	* @param string $val
 	*/
 	protected function dir_upper($val)
@@ -735,7 +771,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Return lowercased string
+	* Return lowercased string e.g. "{{ user.address | lower }}"
 	* @param string $val
 	*/
 	protected function dir_lower($val)
@@ -744,7 +780,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Return Titled String
+	* Return Titled String e.g. "{{ company.name | title }}"
 	* @param string $val
 	*/
 	protected function dir_title($val)
@@ -753,7 +789,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Return number formatted to supplied decimals
+	* Return number formatted to supplied decimals e.g. "{{ order.amount_due | round(3) }}"
 	* @param int|float $val
 	* @param int $decimals
 	* @param string $decPoint
@@ -771,7 +807,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Escape HTML input string
+	* Escape HTML input string e.g. "{{ user.name | escape }}"
 	* @param string val Unsafe HTML string
 	*/
 	protected function dir_escape($val)
@@ -785,7 +821,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Alias shorthand to "escape"
+	* Alias shorthand to "escape" e.g. "{{ user.name | e }}"
 	* @param string val Unsafe HTML string
 	*/
 	protected function dir_e($val)
@@ -794,7 +830,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Convert new lines into brackets
+	* Convert new lines into brackets e.g. "{{ order.notes | nl2br }}"
 	* @param string val HTML/text string
 	*/
 	protected function dir_nl2br($val)
@@ -803,7 +839,7 @@ class TemplatingEngine
 	}
 
 	/**
-	* Truncate long strings
+	* Truncate long strings "{{ user.name | truncate(10) }}"
 	* @param string $val String to truncate
 	* @param int $max Maximum length
 	* @param string $suffix Attached suffix if string truncated
@@ -815,6 +851,46 @@ class TemplatingEngine
 		if($max > 0 && $val && mb_strlen($val, 'utf-8') > $max){
 			$val = mb_substr($val, 0, $max, 'utf-8').$suffix;
 		}
+		return $val;
+	}
+
+	/**
+	* Trim strings e.g. "{{ user.name | trim }}"
+	* @param string $val Trimmed value
+	* @param string $chars Optional - trimmed characters
+	*/
+	protected function dir_trim($val, $chars = '')
+	{
+		$val = (string) $val;
+		return '' === $chars ? trim($val) : trim($val, $chars);
+	}
+
+	/**
+	* Return concatenated string e.g. "{{ concat("Hello ") | concat(user.name) }}"
+	* Note: non-existing values and improperly quotes strings are ignored
+	* @param string $val Placeholder value, gradually concatenated
+	* @param string $txt Partial string to be concatenated
+	* @param string $glue Delimiter e.g. defaults to single space " "
+	*/
+	protected function dir_concat($val, $txt, $glue = " ")
+	{
+		$txt = trim( (string) $txt);
+		$val = (string) $val;
+		$add = '';
+
+		if(preg_match('/^["\']([^"\']+["\']$)/', $txt, $match)){
+			// quoted string e.g. "Hello" or 'Hello', quotes must be properly enclosed
+			$add = trim($match[1], '"\'');
+		}else{
+			// interpolated value e.g. user.name, NULL if invalid
+			$add = $this->getValue($txt, $this->resValues);
+		}
+
+		if($add){
+			$glue = trim($glue, '\'"'); // quotes are not allowed within glue
+			$val = $val ? "{$val}{$glue}{$add}" : $add;
+		}
+
 		return $val;
 	}
 }
