@@ -94,7 +94,6 @@ class TemplatingEngine
 
 	/**
 	* Return collected errors
-	* @return TemplatingEngine
 	*/
 	public function getErrors()
 	{
@@ -252,14 +251,14 @@ class TemplatingEngine
 				if (preg_match('/^{{\s*if\s+(.+)}}/i', $placeholder)) {
 					// parse {{ IF .. ELSEIF .. ELSE .. ENDIF }}
 					$pos2 = stripos($html, 'endif', $pos1);
-					if($pos2 && ($pos2 = stripos($html, '}}', $pos2))){
+					if ($pos2 && ($pos2 = stripos($html, '}}', $pos2))) {
 						$placeholder = substr($html, $pos1, $pos2 - $pos1 + 2);
 					}
 					$trimPattern = " \n"; // keep curly brackets for easier parsing
 				} elseif (preg_match('/^{{\s*for\s+(.+)}}/i', $placeholder)) {
 					// parse {{ FOR .. ELSEFOR .. ENDFOR }}
 					$pos2 = stripos($html, 'endfor', $pos1);
-					if($pos2 && ($pos2 = stripos($html, '}}', $pos2))){
+					if ($pos2 && ($pos2 = stripos($html, '}}', $pos2))) {
 						$placeholder = substr($html, $pos1, $pos2 - $pos1 + 2);
 					}
 					$trimPattern = " \n"; // keep curly brackets for easier parsing
@@ -803,6 +802,8 @@ class TemplatingEngine
 		if(null === $thousandsPoint){
 			$thousandsPoint = $this->defaultThousandPoint;
 		}
+		// fix: convert to proper PHP format, e.g. "12 456,99" => 12456.99
+		$val = (float) strtr(trim( (string) $val), [' ' => '', ',' => '.']);
 		return number_format(floatval($val), intval($decimals), $decPoint, $thousandsPoint);
 	}
 
