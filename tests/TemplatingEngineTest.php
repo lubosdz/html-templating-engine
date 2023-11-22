@@ -345,10 +345,23 @@ HTML;
 			*/
 		];
 
+		// test IMPORT
+		// -- by supplying loaded HTML content
 		$pathInvoice = __DIR__ . '/_invoice.html';
 		$engine->setDirTemplates(dirname($pathInvoice));
-		$resultHtml = $engine->render(file_get_contents($pathInvoice), $params);
 
+		$resultHtml = $engine->render(file_get_contents($pathInvoice), $params);
+		$this->assertTrue(
+			   false !== strpos($resultHtml, 'via file template') // specific string
+			&& false !== strpos($resultHtml, 'My Supplier, Ltd.') // imported header
+			&& false !== strpos($resultHtml, 'customer #123') // translated model attributes
+			&& false === strpos($resultHtml, '{{') // all placeholders translated
+			&& false !== strpos($resultHtml, '#4 - LAST LOOP') // properly detected last item
+			&& false !== strpos($resultHtml, '<b>40.00 &euro;</b>') // expected total due amount
+		);
+
+		// -- by supplying absolute path to HTML template
+		$resultHtml = $engine->render($pathInvoice, $params);
 		$this->assertTrue(
 			   false !== strpos($resultHtml, 'via file template') // specific string
 			&& false !== strpos($resultHtml, 'My Supplier, Ltd.') // imported header

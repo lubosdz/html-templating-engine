@@ -223,13 +223,21 @@ class TemplatingEngine
 	/**
 	* Replace placeholders
 	* Note: this is recursively called method
-	* @param string $html HTML to be processed
+	* @param string $html HTML to be processed. This can be also absolute path to template file e.g. "/app/templates/invoice.html".
+	* 	                  Note that loading template files checks against templates directory which must be already configured.
 	* @param array $params List of params - AR objects, arrays or non-numeric scalars
 	* @param bool $resetGlobalVars Clear already parsed global directives
 	*/
 	public function render($html, array $values = [], $resetGlobalVars = true)
 	{
-		if(null === $this->resHtml){
+		if ($this->dirTemplates && false === strpos($html, '}}') && false !== strpos($html, DIRECTORY_SEPARATOR) && ($path = pathinfo($html))) {
+			// quick check whether supplied $html is valid abs. path inside template directory
+			$path = $path['dirname'].'/'.$path['filename'].'.'.$path['extension'];
+			if ( false !== strpos($path, basename($this->dirTemplates)) && is_file($path)) {
+				$html = file_get_contents($path);
+			}
+		}
+		if (null === $this->resHtml) {
 			// keep only the very first supplied HTML source
 			$this->resHtml = $html;
 		}

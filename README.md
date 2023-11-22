@@ -231,7 +231,8 @@ For security reasons imported subtemplate(s) must reside inside the template dir
 This allows effective structuring and maintaing template sets.
 Attempt to load a template from outside of the template directory will throw an error.
 
-First, set the template directory either explicitly or via loading template by alias:
+First, set the template directory, then process template by supplying loaded HTML content
+or absolute path to template file:
 
 ~~~php
 // set abs. path to template file
@@ -241,8 +242,11 @@ $pathInvoice = "/app/templates/invoice.html";
 $engine->setDirTemplates('/abs/path/to/templates');
 $engine->setDirTemplates(dirname($pathInvoice));
 
-// process the template
+// A/ process the template by supplying loaded content
 $htmlInvoice = $engine->render(file_get_contents($pathInvoice));
+
+// B/ or process template by supplying abs. path to template inside template directory
+$htmlInvoice = $engine->render($pathInvoice);
 ~~~
 
 Then in processed template add the `import` command:
@@ -266,6 +270,7 @@ The engine allows changing:
 * argument separator in directives
 * enabling / disabling logging of errors
 * configuring replacement for empty or unprocessed placeholders
+
 
 Setting the argument separator in directives
 --------------------------------------------
@@ -393,11 +398,12 @@ class MyRenderer extends \lubosdz\html\TemplatingEngine
 Changelog
 =========
 
-1.0.3 - released 2023-11-...
+1.0.3 - released 2023-11-22
 ---------------------------
 
 * fix eval error for numeric values starting with zero (should cast to string)
 * support importing subtemplates via `{{ import file }}`
+* support loading HTML content by supplying abs. path to template file
 * improved documentation
 
 
