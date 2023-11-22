@@ -2,10 +2,10 @@ HTML Templating Engine
 ======================
 
 Simple, fast and flexible HTML templating engine with zero configuration and no dependencies.
-Supports basic control structures (IF, FOR, SET), dynamic directives and public object properties.
-It is similar to [Twig](https://twig.symfony.com/) or [Blade](https://laravel.com/docs/8.x/blade).
+Supports basic control structures (IF, FOR, SET, IMPORT), dynamic directives and public object properties.
+It is similar to [Twig](https://twig.symfony.com/) or [Blade](https://laravel.com/docs/8.x/blade), however with less overhead, no dependencies and without advanced features.
 
-It can be used to render e.g. an invoice or a contract from HTML markup edited in a WYSIWYG editor and turn it optionally into a PDF or MS Word file.
+It can be used to render e.g. an invoice or a contract from HTML markup edited in a WYSIWYG editor and turn it optionally into a PDF or MS Word file - see example bellow.
 Version with features specific for [Yii2 framework](https://www.yiiframework.com/) can be found at [lubosdz/yii2-template-engine](https://github.com/lubosdz/yii2-template-engine).
 
 
@@ -75,7 +75,7 @@ operations within the placeholder.
 
 ~~~php
 $html = $engine->render('Generated on {{ today }} at {{ time }}.');
-// output: "Generated on 31/12/2021 at 23:59."
+// output: "Generated on 31/12/2023 at 23:59."
 
 echo $engine->render('Meet me at {{ now(7200) | time }}.');
 // output example, if now is 8:30: "Meet me at 10:30." (shift +2 hours = 7200 secs)
@@ -108,16 +108,17 @@ $html = $engine->render('Hello {{ customer.name }}.', [
 Dynamic directives
 ------------------
 
-Dynamic directives allows extending functionality for chaining operations inside
-parsed placeholders. They can be added at a runtime as
-**callable anonymous functions accepting arguments**.
+Dynamic directives allow binding custom **anonymous functions** to placeholders.
+They can be added at a runtime in 2 steps and greatly extend flexibility of the engine.
+
+* define directive ie. `$engine->setDirective(directiveName, function($arg){ ... })`
+* call directive inside the placeholder ie. `{{ user.name | directiveName($arg) }}`
 
 In the following example we will attach dynamic directive named `coloredText`
 and render output with custom inline CSS:
 
-
 ```php
-// attach dynamic directive (function) accepting 2 arguments
+// attach dynamic directive (anonymous function) accepting 2 arguments
 $engine->setDirective('coloredText', function($text, $color){
 	return "<span style='color: {$color}'>{$text}</span>";
 });
@@ -128,6 +129,9 @@ echo $engine->render("This is {{ output | coloredText(yellow) }}", [
 ]);
 // output: "This is <span style='color: yellow'>colored text</span>"
 ```
+
+Note: The first argument passed into dynamic directive (`$text` in the example above)
+is always the value from previous piped operation.
 
 
 IF .. ELSEIF .. ELSE .. ENDIF
@@ -191,13 +195,13 @@ $html = $engine->render($templateHtml, $values);
 // outputs valid HTML table with items e.g.: "<table><tr><td>#1</td><td> ..."
 ~~~
 
-Following auxiliary variables are accessible inside each loop:
+Following [auxiliary variables](https://github.com/lubosdz/html-templating-engine/blob/main/src/TemplatingEngine.php#L581) are accessible inside each loop:
 
-* `index` .. (int) 1-based iteration counter
-* `index0` .. (int) 0-based iteration counter
-* `length` .. (int) total number of items/iterations
-* `first` .. (bool) true on first iteration
-* `last` .. (bool) true on last iteration
+* `loop.index` .. (int) 1-based iteration counter
+* `loop.index0` .. (int) 0-based iteration counter
+* `loop.length` .. (int) total number of items/iterations
+* `loop.first` .. (bool) true on first iteration
+* `loop.last` .. (bool) true on last iteration
 
 
 
@@ -214,6 +218,131 @@ Allows manipulating local template variables, such as count totals:
 See also example under `FOR`.
 
 Note: shorthand syntax `+=` e.g. `SET total += subtotal` is NOT supported.
+
+
+
+IMPORT command
+--------------
+
+Allows importing another templates (subtemplates).
+Importing of subtemplates from within subtemplates is supported too.
+For security reasons imported subtemplate(s) must reside inside the template directory
+(e.g. `../templates/header.html`) or subdirectory (e.g. `../templates/invoice/header.html`).
+This allows effective structuring and maintaing template sets.
+Attempt to load a template from outside of the template directory will throw an error.
+
+First, set the template directory either explicitly or via loading template by alias:
+
+~~~php
+// set abs. path to template file
+$pathInvoice = "/app/templates/invoice.html";
+
+// set the template directory
+$engine->setDirTemplates('/abs/path/to/templates');
+$engine->setDirTemplates(dirname($pathInvoice));
+
+// process the template
+$htmlInvoice = $engine->render(file_get_contents($pathInvoice));
+~~~
+
+Then in processed template add the `import` command:
+
+```php
+<h3>Invoice No. 20230123</h3>
+{{ import invoice_header.html }}
+{{ import invoice_body.html }}
+{{ import _partial/version_2/invoice_footer.html }}
+<p>Generated on ...</p>
+```
+
+
+Configuring template engine
+===========================
+
+Templating engine comes with most typical pre-configured settings.
+In many cases it may be useful to change default behaviour.
+The engine allows changing:
+
+* argument separator in directives
+* enabling / disabling logging of errors
+* configuring replacement for empty or unprocessed placeholders
+
+Setting the argument separator in directives
+--------------------------------------------
+
+The engine uses by default semicolon `;` which is less common and less prone to conflict with supplied texts.
+It can be changed to more typical comma `,` by setting:
+
+```php
+$engine->setArgSeparator(",");
+
+// then use it also in placeholders and directives
+$engine->render("{{ user | truncate(5, '..') }}", ["user" => "John Doe"]);
+```
+
+Please note the the engine will ignore placeholders for which parsing fails.
+See also [test](https://github.com/lubosdz/html-templating-engine/blob/main/tests/TemplatingEngineTest.php#L168) for detailed behaviour.
+
+
+Enabling / disabling errors logging
+-----------------------------------
+
+By default the engine [logs errors](https://github.com/lubosdz/html-templating-engine/blob/main/src/TemplatingEngine.php#L131) into system logs.
+Typically, these may be ie. unprocessed placeholders (meaning no value supplied) or failed parsing of placeholders.
+It is highly recommended to enable this logging during development.
+However, in production it may be more desired to turn it off by setting:
+
+```php
+$engine->setLogErrors(false);
+```
+
+
+Replacing of empty or unprocessed placeholders
+----------------------------------------------
+
+By default the engine does not replace any unprocessed or empty placeholders.
+This allows quick discovering the issues in templates during development.
+By defining **replacement as a string** we can force the engine to insert such a string
+into the output for all empty or unprocessed placeholders.
+Following are typical and valid replacement alternatives:
+
+
+```php
+// default - do not process any empty placeholders
+// generated map will set for missed placeholders NULL
+$engine->setForceReplace(false);
+
+// yes, replace empty placeholders with empty string
+$engine->setForceReplace(true);
+$engine->setForceReplace("");
+
+// yes, replace empty placeholders with 5 dots
+$engine->setForceReplace(".....");
+
+// yes, replace empty placeholders with HTML entity to retain spacing
+$engine->setForceReplace("&nbsp;");
+```
+
+
+Reading template resources
+--------------------------
+
+After processing whole template it may be usefull to store some processed data.
+Typically we may want to re-populate template with same values in the future
+and store current data into the database.
+The engine allows reading generated resources.
+
+
+```php
+list($map, $placeholders, $values, $html) = $engine->getResources();
+```
+
+This will return all data necessary for reconstructing the template:
+
+* `$map` .. array of pairs `placeholder` => `processed value`
+* `$placeholders` .. array of pairs `placeholder` => `directive`
+* `$values` .. array of supplied parameters
+* `$html` .. string raw HTML before processing
 
 
 
@@ -263,6 +392,14 @@ class MyRenderer extends \lubosdz\html\TemplatingEngine
 
 Changelog
 =========
+
+1.0.3 - released 2023-11-...
+---------------------------
+
+* fix eval error for numeric values starting with zero (should cast to string)
+* support importing subtemplates via `{{ import file }}`
+* improved documentation
+
 
 1.0.2 - released 2023-09-18
 ---------------------------

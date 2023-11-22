@@ -1,7 +1,7 @@
 <?php
 /**
 * Tests for HTML templating engine
-* Tests pass for PHP 7.0 - 8.2
+* Tests passing PHP 7.0 - 8.2
 */
 
 use lubosdz\html\TemplatingEngine;
@@ -279,7 +279,8 @@ HTML;
 				['description' => 'Item two', 'qty' => 2, 'priceNetto' => 2, 'vatPerc' => 20],
 				['description' => 'Item three', 'qty' => 3, 'priceNetto' => 3, 'vatPerc' => 30],
 				['description' => 'Item four', 'qty' => 4, 'priceNetto' => 4, 'vatPerc' => 40],
-			]
+			],
+			'var_symbol' => '0012345678', // test special case: numeric starting with zero should cast to string
 		];
 
 		$html = <<<HTML
@@ -316,6 +317,7 @@ HTML;
 </table>
 
 <p>Amount due: <b> {{ total | round(2) }} Eur </b></p>
+{{ if var_symbol }} Invoice VS: {{ var_symbol }} {{ endif }}
 HTML;
 
 		$resultHtml = $engine->render($html, $params);
@@ -325,6 +327,35 @@ HTML;
 			&& false === strpos($resultHtml, '{{') // all placeholders translated
 			&& false !== strpos($resultHtml, '#4 - LAST LOOP') // properly detected last item
 			&& false !== strpos($resultHtml, '<p>Amount due: <b> 40.00 Eur </b></p>') // expected total due amount
+			&& false !== strpos($resultHtml, $params['var_symbol']) // test leading zero in numeric param
+		);
+
+		// output via loading extern file "_invoice.html"
+		// alias @templates is defined in app config - see mockApp() bellow
+		// this will also include invoice header from separate partial template "_invoice_header.html"
+		$params += [
+			// dot and array notations - both are valid
+			'supplier.name' => 'My Supplier, Ltd.',
+			'supplier.address' => 'Supplier Rd. 123<br> London<br> NW4 E44',
+			/*
+			'supplier' => [
+				'name' => 'My Supplier, Ltd.',
+				'address' => 'Supplier Rd. 123, London, NW4 E44',
+			],
+			*/
+		];
+
+		$pathInvoice = __DIR__ . '/_invoice.html';
+		$engine->setDirTemplates(dirname($pathInvoice));
+		$resultHtml = $engine->render(file_get_contents($pathInvoice), $params);
+
+		$this->assertTrue(
+			   false !== strpos($resultHtml, 'via file template') // specific string
+			&& false !== strpos($resultHtml, 'My Supplier, Ltd.') // imported header
+			&& false !== strpos($resultHtml, 'customer #123') // translated model attributes
+			&& false === strpos($resultHtml, '{{') // all placeholders translated
+			&& false !== strpos($resultHtml, '#4 - LAST LOOP') // properly detected last item
+			&& false !== strpos($resultHtml, '<b>40.00 &euro;</b>') // expected total due amount
 		);
 	}
 }
@@ -337,6 +368,7 @@ class Customer
 	public $id = 123;
 	public $name = 'John Doe';
 	public $email = 'john@doe.com';
+	public $address = 'Customer Rd. 321<br> Cambridge<br> EW9 X40';
 	public $datetime_created;
 
 	public function __construct()

@@ -16,14 +16,13 @@
 *  - IF .. ELSEIF .. ELSE .. ENDIF
 *  - FOR ... ELSEFOR .. ENDFOR
 *  - SET variable = expression
+*  - IMPORT subtemplate
 *  - dynamic custom directives
 *  - built-in most common directives and date/time formatter
 *
 * Github repos:
-*  - https://github.com/lubosdz/yii2-template-engine
+*  - https://github.com/lubosdz/yii2-template-engine   (alternative with specific features for PHP Yii 2 framework)
 *  - https://github.com/lubosdz/html-templating-engine
-*
-* Please read documentation or check unit tests for more examples.
 */
 
 namespace lubosdz\html;
@@ -70,6 +69,11 @@ class TemplatingEngine
 	* @var string Argument separator, defaults to semicolon [;]
 	*/
 	protected $argSeparator = ';';
+
+	/**
+	* @var string Absolute path to directory with templates
+	*/
+	protected $dirTemplates;
 
 	/**
 	* @var array Variables parsed & evaluated by SET directive
@@ -157,6 +161,28 @@ class TemplatingEngine
 	}
 
 	/**
+	* Set path to directory with templates
+	* @param string $path Abs. path to valid directory
+	* @return TemplatingEngine
+	*/
+	public function setDirTemplates($path)
+	{
+		if (!is_dir($path)) {
+			throw new \Exception('Invalid template directory "'.$path.'".');
+		}
+		$this->dirTemplates = realpath($path);
+		return $this;
+	}
+
+	/**
+	* Return path to directory with templates
+	*/
+	public function getDirTemplates()
+	{
+		return $this->dirTemplates;
+	}
+
+	/**
 	* Set arbitrary dynamic directive, e.g. this is {{ output | coloredText(yellow) }}
 	* @param string $name
 	* @param callable $callable
@@ -186,7 +212,7 @@ class TemplatingEngine
 			$this->resHtml
 		];
 
-		if($reset){
+		if ($reset) {
 			$this->resMap = $this->resPlaceholders = $this->resValues = [];
 			$this->resHtml = null;
 		}
@@ -208,23 +234,23 @@ class TemplatingEngine
 			$this->resHtml = $html;
 		}
 
-		if($html){
-			if($resetGlobalVars){
+		if ($html) {
+			if ($resetGlobalVars) {
 				$this->globalVars = [];
 			}
 
 			$placeholders = $this->collectPlaceholders($html);
-			if($placeholders){
+			if ($placeholders) {
 				$this->resPlaceholders += $placeholders;
 			}
 
 			$values = $this->collectValues($placeholders, $values);
-			if($values){
+			if ($values) {
 				$this->resValues += $values;
 			}
 
 			$map = $this->generateMap($placeholders, $values);
-			if($map){
+			if ($map) {
 				$this->resMap += $map;
 			}
 
@@ -327,6 +353,8 @@ class TemplatingEngine
 				$val = $this->parseAndEvalFor($directives, $paramsValid);
 			} elseif (preg_match('/^\s*set\s+/i', $directives)) {
 				$val = $this->parseAndEvalSet($directives, $paramsValid);
+			} elseif (preg_match('/^\s*import\s+/i', $directives)) {
+				$val = $this->parseAndEvalImport($directives, $paramsValid);
 			} else {
 				$directives = explode('|', $directives);
 				foreach ($directives as $directive) {
@@ -363,7 +391,7 @@ class TemplatingEngine
 		if (false !== strpos($directive, '.')) {
 			// e.g. model.attribute or model.related.attribute
 			$tmp = $this->getValue($directive, $paramsValid);
-			if($tmp !== null){
+			if ($tmp !== null) {
 				$val .= ' '.$tmp;
 				$val = trim($val);
 			}
@@ -413,11 +441,11 @@ class TemplatingEngine
 	{
 		$val = null;
 
-		if(array_key_exists($directive, $paramsValid)){
+		if (array_key_exists($directive, $paramsValid)) {
 			// quick lookup directly in values tree
 			// here we also resolve conflicting keys by prioritizing keys with shallower depth within the values tree
 			$val = $paramsValid[$directive];
-		}else{
+		} else {
 			$chain = explode('.', $directive);
 			$model = $array = null;
 
@@ -520,10 +548,10 @@ class TemplatingEngine
 
 		// collect attribute / array values
 		preg_match_all('/([\w]+\.[\w]+)/i', $expr, $match);
-		if(!empty($match[0])){
-			foreach($match[0] as $directive){
+		if (!empty($match[0])) {
+			foreach ($match[0] as $directive) {
 				$val = (string) $this->processDirective($directive, $paramsValid);
-				if(!is_numeric($val) || trim( (string) $val) === ""){
+				if (!is_numeric($val) || trim($val) === "" || '0' === substr($val, 0, 1)) {
 					$val = '"'.trim( (string) $val, '"').'"'; // fix eval crash: null -> ""
 				}
 				$map[$directive] = $val;
@@ -531,10 +559,11 @@ class TemplatingEngine
 		}
 
 		// collect scalars
-		foreach($paramsValid as $key => $val){
+		foreach ($paramsValid as $key => $val) {
 			if (!is_object($val) && !is_array($val)) {
 				if (trim( (string) $val) !== "") {
-					if (!is_numeric($val)) {
+					if (!is_numeric($val) || '0' === substr($val, 0, 1)) {
+						// special case - numeric starting with zero "0" are also strings
 						$val = '"'.trim( (string) $val, '"').'"'; // fix eval crash: null -> ""
 					}
 				} else {
@@ -594,7 +623,6 @@ class TemplatingEngine
 					} elseif ($htmlElsefor) {
 						$val .= "\n".$this->render($htmlElsefor, $paramsValid, false);
 					}
-
 					++$index;
 				}
 				$val = trim($val);
@@ -634,10 +662,10 @@ class TemplatingEngine
 				ob_start();
 				$result = eval($php);
 				$err = ob_get_clean();
-				if($err){
+				if ($err) {
 					$this->addError(strip_tags($err));
 				}
-			} catch(\Throwable $e) {
+			} catch (\Throwable $e) {
 				$this->addError("[set] ".$e->getMessage()." in expression [{$php}].\nFull directive:\n{$directive}\n");
 				return null; // don't replace placeholder on parsing error
 			}
@@ -647,6 +675,35 @@ class TemplatingEngine
 
 		// SET has no output, return empty string instead of NULL to ensure placeholder will be replaced
 		return '';
+	}
+
+	/**
+	* Import partial template from current template directory
+	* @param string $file The file name or relative path to valid template directory e.g. "partial.html" or in subdirectory "partial/header.html".
+	* @param array $paramsValid
+	*/
+	protected function parseAndEvalImport($directive, array $paramsValid)
+	{
+		$html = '';
+		$file = preg_split("/\s+/", $directive);
+
+		if (!empty($file[1])) {
+			// validate against template directory
+			$file = trim($file[1]);
+			if (!$this->dirTemplates) {
+				throw new \Exception('Please set the template directory.');
+			}
+			$path = $this->dirTemplates .'/'. ltrim($file, ' \/.');
+			if (false === strpos($path, basename($this->dirTemplates))) {
+				throw new \Exception('Template path "'.$path.'" may not point out of the template directory "'.$this->dirTemplates.'".');
+			} elseif (!is_file($path)) {
+				throw new \Exception('Template file not found in "'.$path.'".');
+			}
+			$html = file_get_contents($path);
+			$html = $this->render($html, $paramsValid, false);
+		}
+
+		return $html;
 	}
 
 	/**
@@ -672,10 +729,10 @@ class TemplatingEngine
 
 	/**
 	* Return current timestamp e.g. "{{ now | date }}"
-	* @param null $dummy Just args placeholder, not in use
+	* @param string $dummy Just args placeholder, not in use
 	* @param int $shiftSecs Optionally shift returned time relatively to current time, e.g. "now(+7200)" will return +2 hours
 	*/
-	protected function dir_now($dummy = null, $shiftSecs = 0)
+	protected function dir_now($dummy = "", $shiftSecs = 0)
 	{
 		$ts = time();
 		if ($shiftSecs) {
@@ -686,17 +743,17 @@ class TemplatingEngine
 
 	/**
 	* Return formatted today's date e.g. "{{ today }}"
-	* @param null $dummy Just args placeholder, not in use
+	* @param string $dummy Just args placeholder, not in use
 	* @param string $format defaults to "Y-m-d" if empty
 	* @param int|float $shiftDays e.g. "today(+14)" will generate formatted date +14 days
 	*/
-	protected function dir_today($dummy = null, $format = null, $shiftDays = 0)
+	protected function dir_today($dummy = "", $format = null, $shiftDays = 0)
 	{
 		$ts = time();
 		if ($shiftDays) {
 			$ts += (86400 * $shiftDays);
 		}
-		if(!$format){
+		if (!$format) {
 			$format = $this->defaultDateFormat;
 		}
 		return date($format, $ts);
@@ -713,7 +770,7 @@ class TemplatingEngine
 			return $val;
 		}
 		$ts = is_numeric($val) ? intval($val) : strtotime($val);
-		if(!$format){
+		if (!$format) {
 			$format = $this->defaultDateFormat;
 		}
 		return date($format, $ts);
@@ -730,7 +787,7 @@ class TemplatingEngine
 			return $val;
 		}
 		$ts = is_numeric($val) ? intval($val) : strtotime($val);
-		if(!$format){
+		if (!$format) {
 			$format = $this->defaultTimeFormat;
 		}
 		return date($format, $ts);
@@ -751,10 +808,10 @@ class TemplatingEngine
 		}
 		$ts = is_numeric($val) ? intval($val) : strtotime($val);
 		$formatDate = (null == $formatDate) ? 'medium' : $formatDate;
-		if(!$formatDate){
+		if (!$formatDate) {
 			$formatDate = $this->defaultDateFormat;
 		}
-		if(!$formatTime){
+		if (!$formatTime) {
 			$formatTime = $this->defaultTimeFormat;
 		}
 		return date($formatDate, $ts).$separator.date($formatTime, $ts);
@@ -796,10 +853,10 @@ class TemplatingEngine
 	*/
 	protected function dir_round($val, $decimals = 2, $decPoint = null, $thousandsPoint = null)
 	{
-		if(null === $decPoint){
+		if (null === $decPoint) {
 			$decPoint = $this->defaultDecPoint;
 		}
-		if(null === $thousandsPoint){
+		if (null === $thousandsPoint) {
 			$thousandsPoint = $this->defaultThousandPoint;
 		}
 		// fix: convert to proper PHP format, e.g. "12 456,99" => 12456.99
@@ -849,7 +906,7 @@ class TemplatingEngine
 	{
 		$max = intval($max);
 		$val = trim((string)$val);
-		if($max > 0 && $val && mb_strlen($val, 'utf-8') > $max){
+		if ($max > 0 && $val && mb_strlen($val, 'utf-8') > $max) {
 			$val = mb_substr($val, 0, $max, 'utf-8').$suffix;
 		}
 		return $val;
@@ -879,15 +936,15 @@ class TemplatingEngine
 		$val = (string) $val;
 		$add = '';
 
-		if(preg_match('/^["\']([^"\']+["\']$)/', $txt, $match)){
+		if (preg_match('/^["\']([^"\']+["\']$)/', $txt, $match)) {
 			// quoted string e.g. "Hello" or 'Hello', quotes must be properly enclosed
 			$add = trim($match[1], '"\'');
-		}else{
+		} else {
 			// interpolated value e.g. user.name, NULL if invalid
 			$add = $this->getValue($txt, $this->resValues);
 		}
 
-		if($add){
+		if ($add) {
 			$glue = trim($glue, '\'"'); // quotes are not allowed within glue
 			$val = $val ? "{$val}{$glue}{$add}" : $add;
 		}
