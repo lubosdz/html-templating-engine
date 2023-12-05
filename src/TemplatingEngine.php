@@ -467,12 +467,20 @@ class TemplatingEngine
 					}
 				} elseif ($model && property_exists($model, $attr)) {
 					$val = $model->{$attr};
+					// ensure deep-chaining
 					if (is_object($val)) {
-						// set related model
-						$model = $val;
+						$model = $val; // e.g. related model
+					} elseif (is_array($val)) {
+						$array = $val;
 					}
 				} elseif ($array && array_key_exists($attr, $array)) {
 					$val = $array[$attr];
+					// ensure deep-chaining
+					if (is_object($val)) {
+						$model = $val;
+					} elseif (is_array($val)) {
+						$array = $val;
+					}
 				} else {
 					// invalid attribute - ensure NULL value as a replacement candidate
 					$val = null;
@@ -553,6 +561,11 @@ class TemplatingEngine
 	{
 		$expr = trim($expr);
 		$map = [];
+
+		// required bool single key e.g. {{ if user }}
+		if ($expr && array_key_exists($expr, $paramsValid)) {
+			return empty($paramsValid[$expr]) ? 'false' : 'true';
+		}
 
 		// collect attribute / array values
 		preg_match_all('/([\w]+\.[\w]+)/i', $expr, $match);
