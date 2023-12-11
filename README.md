@@ -104,6 +104,48 @@ $html = $engine->render('Hello {{ customer.name }}.', [
 // output e.g.: "Hello John Doe."
 ~~~
 
+Other built-in directives:
+
+~~~php
+
+// trim - standard PHP trim function
+$html = $engine->render('Hello {{ username | trim }} ', [
+	'username' => '   John Doe!   ',
+]);
+// output "Hello John Doe!"
+
+$html = $engine->render('Hello {{ username | trim(" !eo") }}', [
+	'username' => '   John Doe!   ',
+]);
+// output "Hello John D"
+
+// replace - match simple string or regular expression (REGEX)
+$html = $engine->render('HELLO {{ name | replace (BADBOY, GOODBOY) }}!', [
+	'name' => 'BADBOY'
+]);
+// output "HELLO GOODBOY"
+
+// nl2br - new lines to brackets
+$html = $engine->render('NOTES: {{ notes_textarea | nl2br }}', [
+	'notes_textarea' => "first line ...\nsecond line\n- last line -"
+]);
+// output:
+"NOTES: first line ...
+<br>second line
+<br>- last line -
+"
+
+// concatenation - joining strings
+$html = $engine->render('Order #{{ order_id | concat("by user"; " - ") | concat(customer.name) }}', [
+	'order_id' => "123",
+	'customer' => [
+		'name' => 'John Doe',
+	],
+]);
+// output "Order #123 by customer - John Doe"
+
+~~~
+
 
 Dynamic directives
 ------------------
@@ -376,6 +418,11 @@ $writer = \PhpOffice\PhpWord\IOFactory::createWriter($word, 'Word2007');
 $writer->save('/save/path/my-invoice.docx');
 ~~~
 
+Running tests
+=============
+
+* run `phpunit` in the root directory
+
 
 Tips & notes
 ============
@@ -397,6 +444,18 @@ class MyRenderer extends \lubosdz\html\TemplatingEngine
 
 Changelog
 =========
+
+
+1.0.4 - released 2023-12-11
+---------------------------
+
+* refactored ELSEFOR behaviour - the condition will apply if no items to loop through
+* improved parsing REGEX expressions for more precise match
+* translation of placeholder keys now uses REGEX boundary `\b` to avoid naming conflicts
+* added build-in directive `replace` e.g. " {{ name | replace(WHAT, REPLACE) }} "
+* support for atomic booleans in `IF` condition eg. {{ if cars }} ... {{ endif }}
+* added test + improved documentation
+
 
 1.0.3 - released 2023-11-22
 ---------------------------
