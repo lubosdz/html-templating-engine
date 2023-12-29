@@ -446,6 +446,12 @@ Changelog
 =========
 
 
+1.0.5 - released 2023-12-29
+---------------------------
+
+* exclude partially parsed placeholders from expression translator
+
+
 1.0.4 - released 2023-12-11
 ---------------------------
 

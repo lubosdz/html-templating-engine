@@ -618,7 +618,7 @@ class TemplatingEngine
 			}
 		}
 
-		// translate strings inside condition
+		// translate strings inside condition without partially parsed placeholders, which may corrupt multiline regex
 		if ($map) {
 			$expr = preg_replace(array_keys($map), $map, $expr);
 		}
