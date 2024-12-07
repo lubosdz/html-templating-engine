@@ -47,7 +47,7 @@ class TemplatingEngine
 	protected $resMap = []; //
 
 	/** @var string Parsed HTML source */
-	protected $resHtml;
+	protected $resHtml = null;
 
 	/** @var array List of dynamic directives */
 	protected $dynDir = [];
@@ -73,7 +73,7 @@ class TemplatingEngine
 	/**
 	* @var string Absolute path to directory with templates
 	*/
-	protected $dirTemplates;
+	protected $dirTemplates = '';
 
 	/**
 	* @var array Variables parsed & evaluated by SET directive
@@ -240,7 +240,7 @@ class TemplatingEngine
 		}
 		if (null === $this->resHtml) {
 			// keep only the very first supplied HTML source
-			$this->resHtml = $html;
+			$this->resHtml = (string) $html;
 		}
 
 		if ($html) {
