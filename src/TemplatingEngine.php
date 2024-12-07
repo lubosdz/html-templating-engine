@@ -586,7 +586,8 @@ class TemplatingEngine
 			foreach ($match[0] as $directive) {
 				$val = (string) $this->processDirective($directive, $paramsValid);
 				if (!is_numeric($val) || trim($val) === "" || '0' === substr($val, 0, 1)) {
-					$val = '"'.trim( (string) $val, '"').'"'; // fix eval crash: null -> ""
+					$val = str_replace('"', '', (string) $val);
+					$val = '"'.$val.'"'; // fix eval crash: null -> ""
 				}
 				if (false === strpos($directive, '{{')) {
 					$map["/\b".$directive."\b/"] = $val;
@@ -600,7 +601,8 @@ class TemplatingEngine
 				if (trim( (string) $val) !== "") {
 					if (!is_numeric($val) || '0' === substr($val, 0, 1)) {
 						// special case - numeric starting with zero "0" are also strings
-						$val = '"'.trim( (string) $val, '"').'"'; // fix eval crash: null -> ""
+						$val = str_replace('"', '', (string) $val);
+						$val = '"'.$val.'"'; // fix eval crash: null -> ""
 					}
 				} else {
 					// ugly & unreliable workaround - fix NULL and "" to avoid "non-numeric value encountered" since 7.1
@@ -609,7 +611,8 @@ class TemplatingEngine
 						$val = floatval($val); // fix eval crash: null -> 0 in formulas
 					} else {
 						// probably not formula - cast to string
-						$val = '"'.trim( (string) $val, '"').'"'; // fix eval crash: null -> "" for strings
+						$val = str_replace('"', '', (string) $val);
+						$val = '"'.$val.'"'; // fix eval crash: null -> ""
 					}
 				}
 				if (false === strpos($key, '{{')) {
