@@ -447,7 +447,8 @@ Changelog
 
 1.0.6 - released 2024-12-26
 ---------------------------
-* fix the condition expression containing double quotes in IF statement
+* improved build-in directive `replace`
+* fix the IF condition expression containing double quotes
 * added tests, now passing PHP 7.0 - 8.4
 
 
