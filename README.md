@@ -445,16 +445,19 @@ class MyRenderer extends \lubosdz\html\TemplatingEngine
 Changelog
 =========
 
+1.0.6 - released 2024-12-26
+---------------------------
+* fix the condition expression containing double quotes in IF statement
+* added tests, now passing PHP 7.0 - 8.4
+
 
 1.0.5 - released 2023-12-29
 ---------------------------
-
 * exclude partially parsed placeholders from expression translator
 
 
 1.0.4 - released 2023-12-11
 ---------------------------
-
 * refactored ELSEFOR behaviour - the condition will apply if no items to loop through
 * improved parsing REGEX expressions for more precise match
 * translation of placeholder keys now uses REGEX boundary `\b` to avoid naming conflicts
@@ -465,7 +468,6 @@ Changelog
 
 1.0.3 - released 2023-11-22
 ---------------------------
-
 * fix eval error for numeric values starting with zero (should cast to string)
 * support importing subtemplates via `{{ import file }}`
 * support loading HTML content by supplying abs. path to template file
@@ -474,7 +476,6 @@ Changelog
 
 1.0.2 - released 2023-09-18
 ---------------------------
-
 * support configurable argument separator (beside default semicolon ";")
 * resolve deep-tree argument key conflicts
 * added built-in directive concat, trim
@@ -483,7 +484,6 @@ Changelog
 
 1.0.1 - released 2023-09-05
 ---------------------------
-
 * support PHP 8.2
 * properly detect valid Datetime string in built-in directive
 * forceReplace now takes beside boolean also string as a replacement value
@@ -492,5 +492,4 @@ Changelog
 
 1.0.0, released 2022-02-01
 --------------------------
-
 * initial release

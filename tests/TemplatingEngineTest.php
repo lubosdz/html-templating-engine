@@ -1,7 +1,7 @@
 <?php
 /**
 * Tests for HTML templating engine
-* Tests passing PHP 7.0 - 8.2
+* Tests passing PHP 7.0 - 8.4
 */
 
 use lubosdz\html\TemplatingEngine;
