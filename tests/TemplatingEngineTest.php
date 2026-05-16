@@ -212,6 +212,76 @@ HTML;
 		$params = ['total' => '10 234,99'];
 		$result = $engine->render($html, $params);
 		$this->assertTrue($result == "10234.99");
+
+		// ternary operator ie. {{ valueIsTrue ? condition1 : condition2 }}
+		$html = "today is {{ dayInWeek == 1 ? 'monday' : 'anything but monday' }}";
+
+		$resultHtml = $engine->render($html, ['dayInWeek' => 1]);
+		$this->assertTrue($resultHtml == 'today is monday');
+
+		$resultHtml = $engine->render($html, ['dayInWeek' => 0]);
+		$this->assertTrue(false !== strpos($resultHtml, 'today is anything but monday'));
+
+		$resultHtml = $engine->render($html);
+		$this->assertTrue($resultHtml == $html); // not translated due to parse error - Undefined constant "dayInWeek"
+
+		$html = "{{ a && b ? 'yes' : 'no' }}";
+		$resultHtml = $engine->render($html, ['a' => 1, 'b' => 1]);
+		$this->assertTrue($resultHtml == 'yes');
+
+		$resultHtml = $engine->render($html);
+		$this->assertTrue($resultHtml == $html); // untranslated
+
+		$engine->setForceReplace('---');
+		$resultHtml = $engine->render($html);
+		$this->assertTrue($resultHtml == '---'); // untranslated, replaced with replacement string
+
+		$html = "{{ a || b ? 'yes' : 'no' }}";
+		$resultHtml = $engine->render($html, ['a' => 1]);
+		$this->assertTrue($resultHtml == 'yes');
+
+		$resultHtml = $engine->render($html, ['b' => 1]);
+		$this->assertTrue($resultHtml == '---');
+
+		// objects
+		$engine->reset();
+
+		$params = ['object' => new stdClass()];
+		$html = <<<HTML
+{{ if object }}
+GOOD
+{{ else }}
+BAD
+{{ endif }}
+HTML;
+
+		$resultHtml = $engine->render($html, $params);
+		$this->assertTrue(false !== strpos($resultHtml, "GOOD"));
+
+		$html = <<<HTML
+{{ if object.fakeStuff }}
+GOOD
+{{ else }}
+BAD
+{{ endif }}
+HTML;
+
+		$resultHtml = $engine->render($html, $params);
+		$this->assertTrue(false !== strpos($resultHtml, "BAD"));
+
+		$html = <<<HTML
+{{ if objectxxxx.fakeStuff }}
+GOOD
+{{ else }}
+BAD
+{{ endif }}
+HTML;
+		// neprelozi, objekt neexistuje
+		$engine->reset();
+		$resultHtml = $engine->render($html, $params);
+		$this->assertTrue(false !== strpos($resultHtml, "BAD"));
+
+		$engine->clearErrors();
 	}
 
 	/**

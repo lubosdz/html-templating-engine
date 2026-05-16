@@ -176,6 +176,28 @@ Note: The first argument passed into dynamic directive (`$text` in the example a
 is always the value from previous piped operation.
 
 
+Ternary operator
+----------------
+
+Placeholder with ternary operator must have format `{{ condition ? trueExpression : falseExpression }}`:
+
+~~~php
+$html = "Your name is {{ Customer ? Customer.fullname : 'unknown' }}.";
+
+$values = [
+	// various alternatives ..
+	"Customer" => [
+		"fullname" => "John Doe",
+	],
+	// "Customer" => Customer::findOne($id),
+	// Customer::findOne($id), // works too (autodetected object type)
+];
+
+echo $engine->render($html, $values);
+// output e.g.: "Your name is John Doe." or "Your name is unknown."
+~~~
+
+
 IF .. ELSEIF .. ELSE .. ENDIF
 -----------------------------
 
@@ -444,6 +466,13 @@ class MyRenderer extends \lubosdz\html\TemplatingEngine
 
 Changelog
 =========
+
+1.0.7 - released 2026-05-16
+---------------------------
+* added method `reset()`
+* support ternary operator ie. `{{ expression ? trueCondition : falseCondition }}`
+* improved support for public getters and properties
+
 
 1.0.6 - released 2024-12-26
 ---------------------------

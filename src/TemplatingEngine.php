@@ -16,6 +16,7 @@
 *  - IF .. ELSEIF .. ELSE .. ENDIF
 *  - FOR ... ELSEFOR .. ENDFOR
 *  - SET variable = expression
+*  - Ternary operator
 *  - IMPORT subtemplate
 *  - dynamic custom directives
 *  - built-in most common directives and date/time formatter
@@ -221,6 +222,17 @@ class TemplatingEngine
 	}
 
 	/**
+	* Clear runtime resources and errors.
+	* Replacement string, dynamic directives and argument separator are not changed.
+	*/
+	public function reset()
+	{
+		$this->errors = $this->globalVars = $this->resMap = $this->resPlaceholders = $this->resValues = [];
+		$this->resHtml = null;
+		return $this;
+	}
+
+	/**
 	* Replace placeholders
 	* Note: this is recursively called method
 	* @param string $html HTML to be processed. This can be also absolute path to template file e.g. "/app/templates/invoice.html".
@@ -297,9 +309,6 @@ class TemplatingEngine
 						$placeholder = substr($html, $pos1, $pos2 - $pos1 + 2);
 					}
 					$trimPattern = " \n"; // keep curly brackets for easier parsing
-				} elseif (preg_match("/^{{\s*set\b(.+)=(.+)/i", $placeholder)) {
-					// parse {{ SET variable = expression }}
-					$trimPattern = " {}\n";
 				} else {
 					// any placeholder e.g. "order.id", "variableName" or "order.created | date"
 					$trimPattern = " {}\n";
@@ -364,6 +373,8 @@ class TemplatingEngine
 				$val = $this->parseAndEvalSet($directives, $paramsValid);
 			} elseif (preg_match("/^\s*import\b/i", $directives)) {
 				$val = $this->parseAndEvalImport($directives, $paramsValid);
+			} elseif (preg_match("/^(.+)\?(.+)\:(.+)$/", $directives, $match)) {
+				$val = $this->parseAndEvalTernary($match[1], $match[2], $match[3], $paramsValid);
 			} else {
 				$directives = explode('|', $directives);
 				foreach ($directives as $directive) {
@@ -381,6 +392,52 @@ class TemplatingEngine
 		}
 
 		return $map;
+	}
+
+	/**
+	* Parse and evaluate ternary operator {{ condition ? expressionTrue : expressionFalse }}
+	* @param string $condition
+	* @param string $exprTrue
+	* @param string $exprFalse
+	* @param array $paramsValid
+	*/
+	protected function parseAndEvalTernary($condition, $exprTrue, $exprFalse, $paramsValid)
+	{
+		$val = $php = '';
+		try {
+			// eval condition
+			$php = $this->translateExpression($condition, $paramsValid);
+			$php = 'return '.$php.';';
+			ob_start();
+			$isTrue = eval($php);
+			$err = ob_get_clean();
+			if ($err) {
+				$this->addError(strip_tags($err));
+				return null;
+			}
+			// eval expression
+			if ($isTrue) {
+				$php = $this->translateExpression($exprTrue, $paramsValid);
+			}else{
+				$php = $this->translateExpression($exprFalse, $paramsValid);
+			}
+			$php = 'return '.$php.';';
+			ob_start();
+			$val = eval($php);
+			$err = ob_get_clean();
+			if ($err) {
+				$this->addError(strip_tags($err));
+				return null;
+			}
+		} catch (\Throwable $e) {
+			$this->addError("[ternary] Parse error: {$e->getMessage()} on line {$e->getLine()} in expression [{$php}].\n");
+			if (ob_get_level()) {
+				ob_get_clean(); // close output buffer
+			}
+			return null; // don't replace placeholder - this is error
+		}
+
+		return $val;
 	}
 
 	/**
@@ -466,8 +523,17 @@ class TemplatingEngine
 					} elseif (array_key_exists($attr, $paramsValid) && is_array($paramsValid[$attr])) {
 						$array = $paramsValid[$attr];
 					}
-				} elseif ($model && property_exists($model, $attr)) {
-					$val = $model->{$attr};
+				} elseif ($model) {
+					if (property_exists($model, $attr) && isset($model->{$attr})) {
+						$val = $model->{$attr}; // public property
+					} elseif (method_exists($model, $attr) && is_callable([$model, $attr])) {
+						$val = $model->{$attr}(); // direct public method, no args supplied
+					} elseif (method_exists($model, 'get'.$attr) && is_callable([$model, 'get'.$attr])) {
+						$val = call_user_func([$model, 'get'.$attr]); // public getter method, no args supplied
+					} else {
+						$this->addError('Referenced unaccessible property ['.$attr.'] in directive ['.$directive.'].');
+						$val = null;
+					}
 					// ensure deep-chaining
 					if (is_object($val)) {
 						$model = $val; // e.g. related model
@@ -538,6 +604,9 @@ class TemplatingEngine
 						}
 					} catch (\Throwable $e) {
 						$this->addError("[if] Parse error: {$e->getMessage()} on line {$e->getLine()} in expression [{$php}].\nFull directive:\n{$directive}\n");
+						if (ob_get_level()) {
+							ob_get_clean(); // close output buffer
+						}
 						return null; // don't replace placeholder - this is error
 					}
 				} else {
@@ -568,9 +637,11 @@ class TemplatingEngine
 			if (array_key_exists($expr, $paramsValid)) {
 				// key hit expression e.g. "{{ if users }}"
 				return empty($paramsValid[$expr]) ? 'false' : 'true';
+			} elseif (array_key_exists(strtolower($expr), $paramsValid)) {
+				// case insensitive object reference e.g. "{{ if Users }}"
+				return empty($paramsValid[strtolower($expr)]) ? 'false' : 'true';
 			} elseif (!is_numeric($expr) && strlen($expr) < 30 && preg_match('/^\w+$/', $expr)) {
-				// Here we assume single non-numeric key up to 30 chars, which does not exist, therefore no further processing needed.
-				// The pattern/condition should meet requirements for naming the PHP constants (more tuning here possibly needed).
+				// $expr is untranslated single string up to 30 chars with no dot-expansion, therefore no further processing needed
 				// This prevents from PHP eval error "Undefined constant ...".
 				// We ignore valid patterns such as:
 				//  - related attributes with syntax "user.name",
@@ -586,7 +657,7 @@ class TemplatingEngine
 			foreach ($match[0] as $directive) {
 				$val = (string) $this->processDirective($directive, $paramsValid);
 				if (!is_numeric($val) || trim($val) === "" || '0' === substr($val, 0, 1)) {
-					$val = self::normnalizeEvalExpr($val); // fix eval crash: null -> ""
+					$val = self::normalizeEvalExpr($val); // fix eval crash: null -> ""
 				}
 				if (false === strpos($directive, '{{')) {
 					$map["/\b".$directive."\b/"] = $val;
@@ -596,11 +667,15 @@ class TemplatingEngine
 
 		// collect scalars
 		foreach ($paramsValid as $key => $val) {
-			if (!is_object($val) && !is_array($val)) {
+			if (is_object($val)) {
+				// translate single object references ie. {{ "customer ? customer.name : 'unknown'" }} -> " 'customer' ? customer.name : 'unknown'"
+				// translate case insensitive object references
+				$map["/\b".$key."\b/i"] = "'".$key."'";
+			} elseif (!is_array($val)) {
 				if (trim( (string) $val) !== "") {
 					if (!is_numeric($val) || '0' === substr($val, 0, 1)) {
 						// special case - numeric starting with zero "0" are also strings
-						$val = self::normnalizeEvalExpr($val); // fix eval crash: null -> ""
+						$val = self::normalizeEvalExpr($val); // fix eval crash: null -> ""
 					}
 				} else {
 					// ugly & unreliable workaround - fix NULL and "" to avoid "non-numeric value encountered" since 7.1
@@ -609,7 +684,7 @@ class TemplatingEngine
 						$val = floatval($val); // fix eval crash: null -> 0 in formulas
 					} else {
 						// probably not formula - cast to string
-						$val = self::normnalizeEvalExpr($val);
+						$val = self::normalizeEvalExpr($val);
 					}
 				}
 				if (false === strpos($key, '{{')) {
@@ -630,7 +705,7 @@ class TemplatingEngine
 	* Return normalized string for IF eval stripped off quotes
 	* @param string $val
 	*/
-	protected static function normnalizeEvalExpr($val)
+	protected static function normalizeEvalExpr($val)
 	{
 		// fix eval crash: null -> ""
 		return '"'.str_replace('"', '', (string) $val).'"';
