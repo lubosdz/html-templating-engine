@@ -340,7 +340,7 @@ class TemplatingEngine
 				// extract objects with attributes (active records & model forms)
 				$name = is_numeric($key) ? self::getShortClassname($model) : strtolower($key);
 				$outModels[$name] = $model;
-			} elseif (!is_numeric($key) && (is_scalar($model) || is_array($model))) {
+			} elseif (!is_numeric($key) && $key && (is_scalar($model) || is_array($model))) {
 				// primitives with named keys, e.g. 'topLabel' => 'Client name'
 				$outScalarsArrays[$key] = $model;
 			} elseif ($model === null) {
